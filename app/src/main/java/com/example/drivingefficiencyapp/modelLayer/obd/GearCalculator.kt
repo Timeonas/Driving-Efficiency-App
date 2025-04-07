@@ -2,24 +2,22 @@ package com.example.drivingefficiencyapp.modelLayer.obd
 
 class GearCalculator(
     wheelDiameter: Double = 0.6096,
-    private val finalDriveRatioI: Double = 3.68,  //For gears 1-4
-    private val finalDriveRatioII: Double = 2.92, //For gears 5-6
+    private val finalDriveRatio: Double = 3.611,  //For all gears
     private val idleRpmUpperThreshold: Int = 1000,
     private val speedThreshold: Int = 3,
     private val rpmChangeThreshold: Int = 200,
     private val gearRatios: Map<Int, Double> = mapOf(
-        1 to 3.77,
-        2 to 1.96,
-        3 to 1.26,
-        4 to 0.87,
-        5 to 0.86,
-        6 to 0.72
+        1 to 3.727,
+        2 to 2.048,
+        3 to 1.258,
+        4 to 0.919,
+        5 to 0.738,
+        6 to 0.622
     )
 ) {
     private val wheelCircumference = Math.PI * wheelDiameter
     private val secondsPerMinute = 60.0
     private val kmhConversionFactor = 3.6
-
     private var lastRpm = 0
     private var lastSpeed = 0.0
     private var neutralCounter = 0
@@ -39,9 +37,8 @@ class GearCalculator(
         if (speedKmh <= 0.0) return "N"
 
         //calculate theoretical speed for each gear
-        val gearSpeeds = gearRatios.mapValues { (gear, ratio) ->
-            val finalDrive = if (gear <= 4) finalDriveRatioI else finalDriveRatioII
-            (rpm * wheelCircumference * kmhConversionFactor) / (ratio * finalDrive * secondsPerMinute)
+        val gearSpeeds = gearRatios.mapValues { (_, ratio) ->
+            (rpm * wheelCircumference * kmhConversionFactor) / (ratio * finalDriveRatio * secondsPerMinute)
         }
 
         //find the gear with the closest calculated speed to actual speed
