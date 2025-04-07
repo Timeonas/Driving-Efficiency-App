@@ -144,7 +144,7 @@ class ObdDataReader(
                     }
 
                     lastTimestamp = currentTime
-
+                    Log.d("FuelCalcDebug", "RPM: $currentRpm, MAF: $mafValue g/s, Speed: $speedValue km/h, Source: $fuelRateSource, Calculated Rate: $instantFuelRate L/h")
                     _obdData.emit(
                         ObdData(
                             rpm = "$currentRpm RPM",
