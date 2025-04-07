@@ -1,0 +1,40 @@
+[versions]
+agp = "8.9.0"
+kotlin = "1.9.24"
+coreKtx = "1.15.0"
+junit = "4.13.2"
+junitVersion = "1.2.1"
+espressoCore = "3.6.1"
+appcompat = "1.7.0"
+material = "1.12.0"
+firebase-bom = "33.8.0"
+gms-maps = "19.0.0"
+gms-location = "21.3.0"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+#Firebase Auth
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom"}
+firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }
+#Firebase Firestore and Storage
+firebase-firestore = { module = "com.google.firebase:firebase-firestore-ktx" }
+firebase-storage = { module = "com.google.firebase:firebase-storage-ktx" }
+#Glide
+glide = { group = "com.github.bumptech.glide", name = "glide", version = "4.16.0" }
+#Google Maps SDK
+google-android-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "gms-maps" }
+google-android-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "gms-location" }
+
+# TensorFlow Lite
+tensorflow-lite = { module = "org.tensorflow:tensorflow-lite", version = "2.8.0" }
+tensorflow-lite-support = { module = "org.tensorflow:tensorflow-lite-support", version = "0.4.0" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+
