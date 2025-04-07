@@ -20,7 +20,7 @@ class ObdDataReader(
     private var currentRpm: Int = 0
     private var currentSpeed: Double = 0.0
     private var currentFuelRate: Double = 0.0
-    private var currentGear: Int = 0
+    private var currentGear: String = "-"
 
     private val standardAfrDiesel = 25.0
     private val fuelDensityDiesel = 840.0
@@ -40,7 +40,7 @@ class ObdDataReader(
     data class ObdData(
         val rpm: String = "- RPM",
         val speed: String = "- km/h",
-        val gear: String = "- Gear",
+        val gear: String = "-",
         val temperature: String = "- °C",
         val instantFuelRate: String = "- L/h",
         val averageFuelConsumption: String = "- L/100km",
@@ -149,7 +149,7 @@ class ObdDataReader(
                         ObdData(
                             rpm = "$currentRpm RPM",
                             speed = String.format("%.1f km/h", currentSpeed),
-                            gear = "Gear: $currentGear",
+                            gear = currentGear,
                             temperature = tempStr,
                             instantFuelRate = String.format("%.2f L/h", instantFuelRate),
                             averageFuelConsumption = String.format("%.2f L/100km", rawAverageFuelConsumption),
@@ -277,7 +277,7 @@ class ObdDataReader(
                     if (dataBytes.length >= 2) {
                         val speed = Integer.parseInt(dataBytes.substring(0, 2), 16).toDouble()
                         //calculate gear the driver is in
-                        currentGear = gearCalculator.calculateGear(currentRpm, speed).toIntOrNull() ?: 0
+                        currentGear = gearCalculator.calculateGear(currentRpm, speed)
                         return "$speed"
                     } else {
                         "- (Invalid Data - Short)"

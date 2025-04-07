@@ -2,15 +2,9 @@ package com.example.drivingefficiencyapp.viewLayer.ui
 
 import android.Manifest
 import android.app.AlertDialog
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.location.Location
-import android.location.LocationManager
 import android.os.*
 import android.util.Log
 import android.view.View
@@ -47,11 +41,10 @@ import com.example.drivingefficiencyapp.modelLayer.trip.TripSummary
 import java.text.SimpleDateFormat
 import java.util.*
 
-class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventListener {
+class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var binding: StartDriveActivityBinding
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
-    private lateinit var sensorManager: SensorManager
     private var googleMap: GoogleMap? = null
     private var pendingLocation: LatLng? = null
     private var currentBearing: Float = 0f
@@ -59,20 +52,11 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
     private val handler = Handler(Looper.getMainLooper())
     private var isRunning = false
     private val tripRepository = TripRepository()
-    private var accelerometerValues = FloatArray(3)
-    private var magnetometerValues = FloatArray(3)
-    private var hasAccelerometerData = false
-    private var hasMagnetometerData = false
 
     //OBD data collection
     private var obdDataCollectionJob: Job? = null
     private var obdDataReader: ObdDataReader? = null
     private var previousLocation: Location? = null
-    private var bearingQueue = ArrayDeque<Float>(5)
-    private var isFirstLocationUpdate = true
-    private val rotationMatrix = FloatArray(16)
-    private val orientationAngles = FloatArray(3)
-    private var sensorBearing = 0f
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
@@ -99,7 +83,6 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
         setContentView(binding.root)
     }
     private fun initializeComponents() {
-        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         setupLocationCallback()
         setupMapFragment()
@@ -117,64 +100,43 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 val location = locationResult.lastLocation ?: return
+                val currentLatLng = LatLng(location.latitude, location.longitude)
+                var newBearing: Float? = null // Use nullable Float to indicate if bearing was determined
 
-                if (isFirstLocationUpdate) {
-                    //just center the map
-                    isFirstLocationUpdate = false
-                    previousLocation = location
-                    updateMapLocation(LatLng(location.latitude, location.longitude), false)
-                    return
+                if (location.hasBearing() && location.speed > 0.5f) { // Maybe lower threshold slightly?
+                    newBearing = location.bearing
+                } else if (previousLocation != null && location.speed > 0.5f) { // Fallback calculation
+                    if (location.latitude != previousLocation!!.latitude || location.longitude != previousLocation!!.longitude) {
+                        newBearing = previousLocation!!.bearingTo(location) // Calculate bearing manually
+                    }
                 }
-
-                //bearing from location changes over time
-                val bearing = calculateBearingFromLocations(previousLocation, location)
-
-                if (bearing != null && location.speed > 1.0) {
-                    //bearing to queue for smoothing
-                    bearingQueue.add(bearing)
-                    if (bearingQueue.size > 5) bearingQueue.removeFirst()
-                    //average bearing for smoother transitions
-                    currentBearing = bearingQueue.average().toFloat()
-
-                    updateMapLocation(LatLng(location.latitude, location.longitude), true)
+                if (newBearing != null) {
+                    // Optional: Add smoothing logic here (see below)
+                    currentBearing = newBearing // Update the current bearing
+                    updateMapCamera(currentLatLng, true)
                 } else {
-                    //update position without changing orientation
-                    updateMapLocation(LatLng(location.latitude, location.longitude), false)
+                    // Update position only if no reliable bearing found
+                    updateMapCamera(currentLatLng, false)
                 }
 
-                previousLocation = location
+                previousLocation = location // Store for the next iteration
             }
         }
     }
 
-    private fun calculateBearingFromLocations(start: Location?, end: Location): Float? {
-        if (start == null) return null
-        val distance = start.distanceTo(end)
-        if (distance < 5) return null //Ignore tiny movements
-
-        return start.bearingTo(end)
-    }
-
-    private fun updateMapLocation(location: LatLng, updateBearing: Boolean) {
-        if (googleMap == null) {
-            pendingLocation = location
-            return
-        }
+    private fun updateMapCamera(location: LatLng, updateBearing: Boolean) {
         val cameraPositionBuilder = CameraPosition.Builder()
             .target(location)
-            .zoom(18f)
-            .tilt(60f)
+            .zoom(15f)
+            .tilt(45f)  // Lower tilt for better visibility
 
         if (updateBearing) {
             cameraPositionBuilder.bearing(currentBearing)
         }
 
-        val cameraPosition = cameraPositionBuilder.build()
-        val animationDuration = if (updateBearing) 1000 else 500
-
         googleMap?.animateCamera(
-            CameraUpdateFactory.newCameraPosition(cameraPosition),
-            animationDuration,
+            CameraUpdateFactory.newCameraPosition(cameraPositionBuilder.build()),
+            500,  // Simple animation duration
             null
         )
     }
@@ -459,7 +421,6 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
         try {
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
                 .setMinUpdateIntervalMillis(500L) //Minimum 0.5 second between updates
-                .setMaxUpdateDelayMillis(2000L) //Maximum 2 seconds delay
                 .build()
 
             fusedLocationClient.requestLocationUpdates(
@@ -494,12 +455,12 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
             googleMap?.isMyLocationEnabled = true
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                 location?.let {
-                    updateMapLocation(LatLng(it.latitude, it.longitude), false)
+                    updateMapCamera(LatLng(it.latitude, it.longitude), false)
                 }
             }
             pendingLocation?.let { location ->
                 //dont update bearing for pending locations
-                updateMapLocation(location, false)
+                updateMapCamera(location, false)
                 pendingLocation = null
             }
         } catch (e: SecurityException) {
@@ -507,79 +468,11 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sensor ->
-            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME)
-        }
-        sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.let { sensor ->
-            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME)
-        }
-    }
-    override fun onSensorChanged(event: SensorEvent) {
-        //use sensors when GPS bearing is not available or speed is very low
-        if (previousLocation?.speed ?: 0f > 1.0f) return
-
-        when (event.sensor.type) {
-            Sensor.TYPE_ACCELEROMETER -> {
-                System.arraycopy(event.values, 0, accelerometerValues, 0, 3)
-                hasAccelerometerData = true
-            }
-            Sensor.TYPE_MAGNETIC_FIELD -> {
-                System.arraycopy(event.values, 0, magnetometerValues, 0, 3)
-                hasMagnetometerData = true
-
-                //sensor accuracy
-                if (event.accuracy < SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM) {
-                    return
-                }
-            }
-        }
-
-        if (hasAccelerometerData && hasMagnetometerData) {
-            if (SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerValues, magnetometerValues)) {
-                SensorManager.getOrientation(rotationMatrix, orientationAngles)
-                val degrees = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
-                val newBearing = if (degrees < 0) degrees + 360f else degrees
-                sensorBearing = lowPassFilter(sensorBearing, newBearing, 0.05f)
-
-                //use sensor bearing when GPS bearing is unavailable
-                if (bearingQueue.isEmpty() && previousLocation?.speed ?: 0f < 1.0f) {
-                    currentBearing = sensorBearing
-                    if (googleMap != null && pendingLocation != null) {
-                        updateMapLocation(pendingLocation!!, true)
-                        pendingLocation = null
-                    }
-                }
-            }
-        }
-    }
-
-    private fun lowPassFilter(oldValue: Float, newValue: Float, factor: Float): Float {
-        return oldValue + factor * ((newValue - oldValue + 180) % 360 - 180)
-    }
-    private fun Collection<Float>.average(): Double {
-        if (isEmpty()) return 0.0
-
-        var sumSin = 0.0
-        var sumCos = 0.0
-        //convert to radians
-        forEach { bearing ->
-            val rad = Math.toRadians(bearing.toDouble())
-            sumSin += Math.sin(rad)
-            sumCos += Math.cos(rad)
-        }
-
-        val avg = Math.toDegrees(Math.atan2(sumSin, sumCos))
-        return if (avg < 0) avg + 360 else avg
-    }
-
     private fun cleanup() {
         isRunning = false
         handler.removeCallbacksAndMessages(null)
         stopLocationUpdates()
         stopLocationService()
-        sensorManager.unregisterListener(this)
         //Cancel OBD data collection
         obdDataCollectionJob?.cancel()
         obdDataCollectionJob = null
@@ -593,8 +486,6 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onRequestPermissionsResult(
@@ -615,11 +506,6 @@ class StartDriveActivity : AppCompatActivity(), OnMapReadyCallback, SensorEventL
             }
             showToast(message)
         }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        sensorManager.unregisterListener(this)
     }
 
     private fun checkGooglePlayServices(): Boolean {
